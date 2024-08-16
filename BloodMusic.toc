@@ -1,0 +1,12 @@
+## Interface: 100207, 110000, 110002
+
+## Title: Blood Music
+## Notes: An addon for play song during blood lust.
+## Author: Quimeboule
+## Version: 1.0
+## SavedVariables: BloodMusicDB
+## IconTexture: Interface\AddOns\BloodMusic\icon.png
+
+
+locales.xml
+BloodMusic.lua
