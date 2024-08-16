@@ -1,33 +1,82 @@
 local addonName, addonTable = ...
 
 -- Liste des fichiers audio initiale
-BloodMusicDB = BloodMusicDB or { soundFiles = {}, selectedChannel = "Master" }
+BloodMusicDB = BloodMusicDB or { soundFiles = {}, selectedChannel = "Master", archivedFiles = {} }
+
+-- Vérifie si l'ID du sort correspond à Blood Lust ou Heroism
+local function IsBloodLustAura(spellID)
+    local bloodLustIDs = {
+        [80353] = true,  -- Time Warp
+        [32182] = true,  -- Heroism
+        [2825] = true,   -- Blood Lust
+        [264667] = true, -- Primal Rage
+        [146555] = true, -- Ancient Hysteria
+        [178207] = true, -- Drums of the Mountain
+        [256740] = true, -- Drums of the Maelstrom
+        [230935] = true, -- Drums of the Rising Sun
+        [309658] = true, -- Drums of the Chieftain
+        [350249] = true, -- Drums of the Wild
+        [368245] = true, -- Drums of the Thunder
+        [390386] = true, -- Drums of the Dread
+        [381301] = true, -- Drums of the Frenzy
+        [386540] = true, -- Drums of the Frenzy
+        [441076] = true,  -- Drums of the Fury
+        [449609] = true, -- test
+    }
+    return bloodLustIDs[spellID]
+end
 
 local currentPlayingSoundID = nil -- Variable pour stocker l'identifiant du son en cours
 local currentPlayingSoundPath = nil -- Variable pour stocker le fichier du son en cours
 local isPlaying = false -- Variable pour suivre l'état de lecture
+local finalSoundFiles = {} -- tous les sons a affichés peut importe l'état
 
+-- default songs
+local defaultSoundFiles = {
+    "Interface/AddOns/BloodMusic/Sounds/avengers-endgame.mp3",
+    "Interface/AddOns/BloodMusic/Sounds/dragon-ball-super.mp3",
+    "Interface/AddOns/BloodMusic/Sounds/kingsman.mp3",
+    "Interface/AddOns/BloodMusic/Sounds/obiwan-starwars.mp3",
+    "Interface/AddOns/BloodMusic/Sounds/warriors-league-of-legends.mp3",
+    "Interface/AddOns/BloodMusic/Sounds/world-of-warcraft-a-call-to-arms.mp3",
+}
 
-local function getFileNameWithoutExtension(fileName)
+-- donne le nom du fichier
+local function getFileName(fileName)
     local baseName = string.match(fileName, "([^/\\]+%.mp3)$")
     return baseName or fileName
 end
 
 local function initPannelOptions()
-    -- Initialise la liste des sons si elle n'existe pas encore
-    if not BloodMusicDB.soundFiles or #BloodMusicDB.soundFiles == 0 then
-        BloodMusicDB.soundFiles = {
-            "Interface/AddOns/BloodMusic/Sounds/avengers-endgame.mp3",
-            "Interface/AddOns/BloodMusic/Sounds/dragon-ball-super.mp3",
-            "Interface/AddOns/BloodMusic/Sounds/kingsman.mp3",
-            "Interface/AddOns/BloodMusic/Sounds/obiwan-starwars.mp3",
-            "Interface/AddOns/BloodMusic/Sounds/warriors-league-of-legends.mp3",
-            "Interface/AddOns/BloodMusic/Sounds/world-of-warcraft-a-call-to-arms.mp3",
-            -- Ajoutez d'autres fichiers audio ici
-        }
+    
+    -- table pour les fichiers supprimés de la liste
+    if not BloodMusicDB.archivedFiles then
+        BloodMusicDB.archivedFiles = {}
     end
-    -- Liste des fichiers audio, qui sera utilisée pour créer la liste dans l'interface utilisateur
-    local soundFiles = BloodMusicDB.soundFiles
+
+    -- Initialise la liste des sons si elle n'existe pas encore
+    -- Ajouter les fichiers audio du DB qui sont activés
+    for _, filePath in ipairs(BloodMusicDB.soundFiles) do
+        if BloodMusicDB.soundFiles[filePath] then
+            table.insert(finalSoundFiles, filePath)
+        end
+    end
+
+    -- Ajouter les fichiers audio par défaut qui ne sont pas déjà dans finalSoundFiles
+    for _, defaultPath in ipairs(defaultSoundFiles) do
+        if not BloodMusicDB.archivedFiles[defaultPath] then
+            local found = false
+            for _, finalPath in ipairs(finalSoundFiles) do
+                if finalPath == defaultPath then
+                    found = true
+                    break
+                end
+            end
+            if not found then
+                table.insert(finalSoundFiles, defaultPath)
+            end
+        end
+    end
 
     local optionsPanel = CreateFrame("Frame", addonName .. "OptionsPanel", UIParent)
     optionsPanel.name = addonName
@@ -149,8 +198,8 @@ local function initPannelOptions()
         -- Ajoute les sons à la liste
         local yOffset = -10 -- Positionnement vertical des cases à cocher
 
-        for i, fileName in ipairs(soundFiles) do
-            local shortFileName = getFileNameWithoutExtension(fileName)
+        for i, fileName in ipairs(finalSoundFiles) do
+            local shortFileName = getFileName(fileName)
 
             -- Créer un cadre pour chaque ligne (texte + boutons)
             local lineFrame = CreateFrame("Frame", addonName .. "LineFrame" .. i, scrollChild)
@@ -159,11 +208,11 @@ local function initPannelOptions()
             local checkButton = CreateFrame("CheckButton", addonName .. "CheckButton" .. i, lineFrame, "InterfaceOptionsCheckButtonTemplate")
             checkButton:SetPoint("LEFT", lineFrame, "LEFT", 0, 0)
             checkButton.Text:SetText(shortFileName)
-            checkButton:SetChecked(BloodMusicDB[fileName] or false)
+            checkButton:SetChecked(BloodMusicDB.soundFiles[fileName] or false)
             checkButton:SetSize(30, 30)
 
             checkButton:SetScript("OnClick", function(self)
-                BloodMusicDB[fileName] = self:GetChecked()
+                BloodMusicDB.soundFiles[fileName] = self:GetChecked()
             end)
 
             -- Bouton "Play/Stop" avec texte
@@ -179,14 +228,14 @@ local function initPannelOptions()
             playStopButton:SetScript("OnClick", function(self)
                 if isPlaying then
                     -- Arrêter le son en cours
-                    StopSound(currentPlayingSoundID, 200)
+                    StopSound(currentPlayingSoundID, 500)
                     currentPlayingSoundID = nil
                     self:SetText(_G["Play"]) -- Change le texte en "Play"
                     isPlaying = false
                 else
                     -- Jouer le son
                     if isPlaying then
-                        StopSound(currentPlayingSoundID, 200)
+                        StopSound(currentPlayingSoundID, 500)
                     end
                     
                     willPlay, soundHandle = PlaySoundFile(fileName, BloodMusicDB.selectedChannel)
@@ -213,11 +262,14 @@ local function initPannelOptions()
             deleteButton:SetScript("OnClick", function()
                 -- Arrêter le son en cours si nécessaire
                 if currentPlayingSoundID and currentPlayingFileName == fileName then
-                    StopSound(currentPlayingSoundID)
+                    StopSound(currentPlayingSoundID, 500)
                     currentPlayingSoundID = nil
                 end
-                table.remove(soundFiles, i)
-                BloodMusicDB[fileName] = nil
+                
+                BloodMusicDB.archivedFiles[fileName] = true
+                -- Supprimer le fichier de la liste des fichiers actifs
+                BloodMusicDB.soundFiles[fileName] = nil
+                table.remove(finalSoundFiles, i)
                 generateListItem() -- Recrée les cases à cocher après suppression
             end)
 
@@ -257,7 +309,7 @@ local function initPannelOptions()
             if fileName and fileName ~= "" then
                 if string.match(fileName, "%.mp3$") then
                     table.insert(soundFiles, fileName)
-                    BloodMusicDB[fileName] = BloodMusicDB[fileName] or false
+                    BloodMusicDB.soundFiles[fileName] = BloodMusicDB.soundFiles[fileName] or false
                     generateListItem() -- Recrée les cases à cocher pour inclure le nouveau fichier
                     BloodMusicDB.soundFiles = soundFiles -- Mise à jour de la liste des sons dans BloodMusicDB
                 else
@@ -273,71 +325,45 @@ local function initPannelOptions()
         hideOnEscape = true,
     }
 
-    -- Bouton pour tester un son aléatoire
+    -- Bouton pour restaurer les sons par defaut
     local testButton = CreateFrame("Button", addonName .. "TestButton", optionsPanel, "UIPanelButtonTemplate")
-    testButton:SetSize(120, 30)
+    testButton:SetSize(220, 30)
     testButton:SetPoint("BOTTOMRIGHT", -16, 16)
-    testButton:SetText(_G["Test"])
+    testButton:SetText(_G["RestoreDefaultSongs"])
     testButton:SetScript("OnClick", function()
-        -- Choisir un son aléatoire et le jouer
-        if isPlaying then
-            StopSound(currentPlayingSoundID)
-            currentPlayingSoundID = nil
-            isPlaying = false
-        end
-
-        local activeSounds = {}
-        for i, fileName in ipairs(soundFiles) do
-            local checkButton = _G[addonName .. "CheckButton" .. i]
-            if checkButton and checkButton:GetChecked() then
-                table.insert(activeSounds, fileName)
+        BloodMusicDB.archivedFiles = {}
+        finalSoundFiles = {}
+        -- Initialise la liste des sons si elle n'existe pas encore
+        -- Ajouter les fichiers audio du DB qui sont activés
+        for _, filePath in ipairs(BloodMusicDB.soundFiles) do
+            if BloodMusicDB.soundFiles[filePath] then
+                table.insert(finalSoundFiles, filePath)
             end
         end
 
-        -- Jouer un son aléatoire parmi les sons sélectionnés
-        if #activeSounds > 0 then
-            local randomIndex = math.random(#activeSounds)
-            local filePath = activeSounds[randomIndex]
-            local willPlay, soundHandle = PlaySoundFile(filePath, BloodMusicDB.selectedChannel)
-            if willPlay then
-                currentPlayingSoundID = soundHandle
-                currentPlayingSoundPath = filePath
-                isPlaying = true
-            else
-                print("|cFFFF0000".._G["ErreurCantPlaySong"].."|r")
+        -- Ajouter les fichiers audio par défaut qui ne sont pas déjà dans finalSoundFiles
+        for _, defaultPath in ipairs(defaultSoundFiles) do
+            if not BloodMusicDB.archivedFiles[defaultPath] then
+                local found = false
+                for _, finalPath in ipairs(finalSoundFiles) do
+                    if finalPath == defaultPath then
+                        found = true
+                        break
+                    end
+                end
+                if not found then
+                    table.insert(finalSoundFiles, defaultPath)
+                end
             end
-        else
-            print("|cFFFF0000".._G["NoFile"].."|r")
         end
+
+        generateListItem()
+
     end)
 
     local category = Settings.RegisterCanvasLayoutCategory(optionsPanel, addonName)
     Settings.RegisterAddOnCategory(category)
 end
-
--- Vérifie si l'ID du sort correspond à Blood Lust ou Heroism
-local function IsBloodLustAura(spellID)
-    local bloodLustIDs = {
-        [80353] = true,  -- Time Warp
-        [32182] = true,  -- Heroism
-        [2825] = true,   -- Blood Lust
-        [264667] = true, -- Primal Rage
-        [146555] = true, -- Ancient Hysteria
-        [178207] = true, -- Drums of the Mountain
-        [256740] = true, -- Drums of the Maelstrom
-        [230935] = true, -- Drums of the Rising Sun
-        [309658] = true, -- Drums of the Chieftain
-        [350249] = true, -- Drums of the Wild
-        [368245] = true, -- Drums of the Thunder
-        [390386] = true, -- Drums of the Dread
-        [381301] = true, -- Drums of the Frenzy
-        [386540] = true, -- Drums of the Frenzy
-        [441076] = true,  -- Drums of the Fury
-    }
-    return bloodLustIDs[spellID]
-end
-
-
 
 -- Fonction pour vérifier les auras appliquées et lancé le sond pour la bl
 local last_aura_bl_id = nil
@@ -353,14 +379,14 @@ local function CheckAuras(unit, info)
                     last_aura_bl_id = v.auraInstanceID
                     -- Arrêter le son en cours si nécessaire
                     if isPlaying then
-                        StopSound(currentPlayingSoundID)
+                        StopSound(currentPlayingSoundID, 500)
                         currentPlayingSoundID = nil
                         isPlaying = false
                     end
     
                     -- Crée une liste des sons actifs (cochés)
                     
-                    local soundFiles = BloodMusicDB.soundFiles
+                    local soundFiles = finalSoundFiles
                     local activeSounds = {}
                     for i, fileName in ipairs(soundFiles) do
                         local checkButton = _G[addonName .. "CheckButton" .. i]
@@ -393,7 +419,7 @@ local function CheckAuras(unit, info)
             
             if last_aura_bl_id ~= nil and last_aura_bl_id == v then
                 if isPlaying then
-                    StopSound(currentPlayingSoundID)
+                    StopSound(currentPlayingSoundID, 500)
                     currentPlayingSoundID = nil
                     isPlaying = false
                 end
