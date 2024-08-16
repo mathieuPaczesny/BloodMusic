@@ -333,7 +333,6 @@ local function IsBloodLustAura(spellID)
         [381301] = true, -- Drums of the Frenzy
         [386540] = true, -- Drums of the Frenzy
         [441076] = true,  -- Drums of the Fury
-        [449609] = true --test
     }
     return bloodLustIDs[spellID]
 end
