@@ -39,6 +39,7 @@ local defaultSoundFiles = {
     "Interface/AddOns/BloodMusic/Sounds/obiwan-starwars.mp3",
     "Interface/AddOns/BloodMusic/Sounds/warriors-league-of-legends.mp3",
     "Interface/AddOns/BloodMusic/Sounds/world-of-warcraft-a-call-to-arms.mp3",
+    "Interface/AddOns/BloodMusic/Sounds/pedro-pedro-pedro.mp3",
 }
 
 -- donne le nom du fichier
